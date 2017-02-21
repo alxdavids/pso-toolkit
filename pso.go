@@ -1,28 +1,23 @@
-package main
+package pso
 
 import (
 	"crypto/rand"
 	"github.com/alxdavids/bloom-filter/encbf"
 	"github.com/alxdavids/bloom-filter/standard"
 	"log"
-	"math"
 	"math/big"
+	"time"
 )
 
-var (
-	max     = int64(1000)      // max size of elements (change this for influence over intersection size)
-	n       = 100              // size of sets
-	keySize = 512              // key size for paillier
-	mode    = 0                // 0 = PSU, 1 = PSI, 2 = PSI/PSU-CA
-	eps     = math.Pow(2, -20) // false-positive prob for BF
-)
-
-func main() {
+func computePSO(n, mode, keySize, max int, eps float64, set1, set2 []*big.Int) []*big.Int {
+	startTime := time.Now()
 	sblof := standard.New(uint(n), eps).(*standard.StandardBloom)
 
 	// Add elements to original Bloom filter
-	set := generateSet(n)
-	for _, v := range set {
+	if set1 == nil {
+		set1 = generateSet(n, int64(max))
+	}
+	for _, v := range set1 {
 		sblof.Add(v.Bytes())
 	}
 
@@ -30,22 +25,36 @@ func main() {
 	pub := eblof.GetPubKey()
 
 	// generate new random set for checking
-	set2 := generateSet(n)
+	if set2 == nil {
+		set2 = generateSet(n, int64(max))
+	}
+	checkTime := time.Now()
 	for _, v := range set2 {
 		eblof.Check(v.Bytes())
 	}
+	log.Println("Hom time: " + time.Since(checkTime).String())
 
+	decTime := time.Now()
 	ptxts := eblof.Decrypt()
+	log.Println("Dec time: " + time.Since(decTime).String())
 
+	outTime := time.Now()
+	items := []*big.Int{}
 	for _, v := range ptxts {
 		kinv := new(big.Int).ModInverse(new(big.Int).SetBytes(v[1]), pub.N)
 		item := new(big.Int).Mod(new(big.Int).Mul(new(big.Int).SetBytes(v[0]), kinv), pub.N)
 
-		log.Println(item)
+		if item.Cmp(big.NewInt(0)) != 0 {
+			items = append(items, item)
+		}
 	}
+	log.Println("Out time: " + time.Since(outTime).String())
+
+	log.Println("Full time: " + time.Since(startTime).String())
+	return items
 }
 
-func generateSet(n int) []*big.Int {
+func generateSet(n int, max int64) []*big.Int {
 	arr := make([]*big.Int, n)
 	for i := 0; i < int(n); i++ {
 		r, e := rand.Int(rand.Reader, big.NewInt(max))
