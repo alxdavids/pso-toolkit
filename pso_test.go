@@ -8,7 +8,7 @@ import (
 
 var (
 	max     = 1000             // max size of elements (change this for influence over intersection size)
-	n       = 100              // size of sets
+	n       = 200              // size of sets
 	keySize = 1024             // key size for paillier
 	mode    = 0                // 0 = PSU, 1 = PSI, 2 = PSI/PSU-CA
 	eps     = math.Pow(2, -20) // false-positive prob for BF

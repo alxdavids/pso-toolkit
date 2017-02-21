@@ -29,9 +29,13 @@ func computePSO(n, mode, keySize, max int, eps float64, set1, set2 []*big.Int) [
 		set2 = generateSet(n, int64(max))
 	}
 	checkTime := time.Now()
+
+	// Setup temp map for performing hom ops in concurrent exec
 	for _, v := range set2 {
 		eblof.Check(v.Bytes())
 	}
+	// Compute combined ciphertexts
+	eblof.HomCombine()
 	log.Println("Hom time: " + time.Since(checkTime).String())
 
 	decTime := time.Now()
