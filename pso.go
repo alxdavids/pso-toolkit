@@ -7,13 +7,15 @@ import (
 	"log"
 	"math/big"
 	"time"
+	"xojoc.pw/bitset"
 )
 
-func computePSO(n, mode, keySize, max int, eps float64, set1, set2 []*big.Int) []*big.Int {
+func computePSO(n, mode, keySize, max int, eps float64, set1, set2 []*big.Int) ([]*big.Int, int) {
 	startTime := time.Now()
 	sblof := standard.New(uint(n), eps).(*standard.StandardBloom)
 
 	// Add elements to original Bloom filter
+	// We create random sets if non are provided
 	if set1 == nil {
 		set1 = generateSet(n, int64(max))
 	}
@@ -42,30 +44,61 @@ func computePSO(n, mode, keySize, max int, eps float64, set1, set2 []*big.Int) [
 	ptxts := eblof.Decrypt()
 	log.Println("Dec time: " + time.Since(decTime).String())
 
+	// Generate correct output for set operation
 	outTime := time.Now()
 	items := []*big.Int{}
-	for _, v := range ptxts {
-		kinv := new(big.Int).ModInverse(new(big.Int).SetBytes(v[1]), pub.N)
-		item := new(big.Int).Mod(new(big.Int).Mul(new(big.Int).SetBytes(v[0]), kinv), pub.N)
+	count := 0
+	if mode == 0 {
+		for _, v := range ptxts {
+			kinv := new(big.Int).ModInverse(new(big.Int).SetBytes(v[1]), pub.N)
+			item := new(big.Int).Mod(new(big.Int).Mul(new(big.Int).SetBytes(v[0]), kinv), pub.N)
 
-		if item.Cmp(big.NewInt(0)) != 0 {
-			items = append(items, item)
+			if item.Cmp(big.NewInt(0)) != 0 {
+				items = append(items, item)
+			}
+		}
+	} else if mode == 1 {
+		for _, v := range ptxts {
+			item := big.NewInt(0)
+			if new(big.Int).SetBytes(v[1]).Cmp(big.NewInt(0)) == 0 {
+				item = new(big.Int).SetBytes(v[0])
+			}
+
+			if item.Cmp(big.NewInt(0)) != 0 {
+				items = append(items, item)
+			}
+		}
+	} else if mode == 2 {
+		for _, v := range ptxts {
+			if new(big.Int).SetBytes(v[0]).Cmp(big.NewInt(0)) == 0 {
+				count++
+			}
 		}
 	}
 	log.Println("Out time: " + time.Since(outTime).String())
 
 	log.Println("Full time: " + time.Since(startTime).String())
-	return items
+	return items, count
 }
 
+// Generates random sets
 func generateSet(n int, max int64) []*big.Int {
 	arr := make([]*big.Int, n)
+	used := &bitset.BitSet{}
 	for i := 0; i < int(n); i++ {
 		r, e := rand.Int(rand.Reader, big.NewInt(max))
 		if e != nil {
 			log.Fatalln(e)
 		}
-		arr[i] = r
+
+		// Make sure we get unique elements
+		if !used.Get(int(r.Int64())) {
+			arr[i] = r
+		} else {
+			// redo loop if not unique
+			i--
+		}
+		used.Set(int(r.Int64()))
 	}
 
 	return arr
