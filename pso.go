@@ -10,20 +10,24 @@ import (
 	"xojoc.pw/bitset"
 )
 
-func computePSO(n, mode, keySize, max int, eps float64, set1, set2 []*big.Int) ([]*big.Int, int) {
+func computePSO(n, mode, keySize, max, maxConc int, eps float64, set1, set2 []*big.Int, eblof *encbf.EncBloom) ([]*big.Int, int, *encbf.EncBloom) {
 	startTime := time.Now()
-	sblof := standard.New(uint(n), eps).(*standard.StandardBloom)
 
-	// Add elements to original Bloom filter
-	// We create random sets if non are provided
-	if set1 == nil {
-		set1 = generateSet(n, int64(max))
-	}
-	for _, v := range set1 {
-		sblof.Add(v.Bytes())
-	}
+	// Give the option of providing a ready-made EBF for faster tests
+	if eblof == nil {
+		sblof := standard.New(uint(n), eps).(*standard.StandardBloom)
 
-	eblof := encbf.New(sblof, keySize, mode).(*encbf.EncBloom)
+		// Add elements to original Bloom filter
+		// We create random sets if non are provided
+		if set1 == nil {
+			set1 = generateSet(n, int64(max))
+		}
+		for _, v := range set1 {
+			sblof.Add(v.Bytes())
+		}
+
+		eblof = encbf.New(sblof, keySize, mode, maxConc).(*encbf.EncBloom)
+	}
 	pub := eblof.GetPubKey()
 
 	// generate new random set for checking
@@ -49,6 +53,7 @@ func computePSO(n, mode, keySize, max int, eps float64, set1, set2 []*big.Int) (
 	items := []*big.Int{}
 	count := 0
 	if mode == 0 {
+		// union
 		for _, v := range ptxts {
 			kinv := new(big.Int).ModInverse(new(big.Int).SetBytes(v[1]), pub.N)
 			item := new(big.Int).Mod(new(big.Int).Mul(new(big.Int).SetBytes(v[0]), kinv), pub.N)
@@ -58,6 +63,7 @@ func computePSO(n, mode, keySize, max int, eps float64, set1, set2 []*big.Int) (
 			}
 		}
 	} else if mode == 1 {
+		// inter
 		for _, v := range ptxts {
 			item := big.NewInt(0)
 			if new(big.Int).SetBytes(v[1]).Cmp(big.NewInt(0)) == 0 {
@@ -69,6 +75,7 @@ func computePSO(n, mode, keySize, max int, eps float64, set1, set2 []*big.Int) (
 			}
 		}
 	} else if mode == 2 {
+		// cardinality
 		for _, v := range ptxts {
 			if new(big.Int).SetBytes(v[0]).Cmp(big.NewInt(0)) == 0 {
 				count++
@@ -78,7 +85,8 @@ func computePSO(n, mode, keySize, max int, eps float64, set1, set2 []*big.Int) (
 	log.Println("Out time: " + time.Since(outTime).String())
 
 	log.Println("Full time: " + time.Since(startTime).String())
-	return items, count
+	eblof.ResetForTesting()
+	return items, count, eblof
 }
 
 // Generates random sets
