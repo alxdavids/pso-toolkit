@@ -1,31 +1,47 @@
 package pso
 
 import (
+	"flag"
 	"github.com/alxdavids/bloom-filter/encbf"
 	"log"
 	"math"
 	"math/big"
+	"runtime"
 	"testing"
 )
 
 var (
-	max       = 1200                // max size of elements (change this for influence over intersection size)
-	n         = int(math.Pow(2, 8)) // size of sets
-	maxConc   = 10000               // Maximum number of initiated goroutines
-	keySize   = 1024                // key size for paillier
-	mode      = 0                   // 0 = PSU, 1 = PSI, 2 = PSI/PSU-CA
-	eps       = math.Pow(2, -25)    // false-positive prob for BF
-	eblofCopy *encbf.EncBloom
-	set1      []*big.Int
-	set2      []*big.Int
+	domain    int                // domain size of elements (change this for influence over intersection size)
+	n         int                // size of set
+	maxProcs  int                // Max number of threads
+	maxConc   = 10000            // Maximum number of initiated goroutines
+	keySize   = 1024             // key size for paillier
+	mode      = 0                // 0 = PSU, 1 = PSI, 2 = PSI/PSU-CA
+	eps       = math.Pow(2, -25) // false-positive prob for BF
+	set1      []*big.Int         // set stored in blof
+	set2      []*big.Int         // set used for querying
+	eblofCopy *encbf.EncBloom    // Used for redoing tests without re-encrypting
 )
+
+func init() {
+	flag.IntVar(&keySize, "k", 1024, "Sets the key size, choose 1024 or 2048")
+	flag.IntVar(&n, "n", 64, "Sets the set size")
+	flag.IntVar(&maxProcs, "m", 4, "Sets the max number of threads to use")
+	prev := runtime.GOMAXPROCS(maxProcs)
+	log.Printf("Previous number of threads used: %v\n", prev)
+}
 
 func TestUnion(t *testing.T) {
 	log.Println("******TESTING UNION******")
-	set1 = generateSet(n, int64(max))
-	set2 = generateSet(n, int64(max))
+	log.Printf("Max number of threads: %v\n", maxProcs)
 
-	newItems, _, eblof := computePSO(n, 0, keySize, max, maxConc, eps, set1, set2, nil)
+	// set the size of the domain here
+	domain = 5 * n
+	set1 = generateSet(n, int64(domain))
+	set2 = generateSet(n, int64(domain))
+
+	newItems, _, eblof := computePSO(n, 0, keySize, domain, maxConc, eps, set1, set2, nil)
+	eblof.DumpParams()
 	eblofCopy = eblof
 
 	// Check item exists in set2 and not in set1
@@ -58,7 +74,7 @@ func TestUnion(t *testing.T) {
 
 func TestInter(t *testing.T) {
 	log.Println("******TESTING INTERSECTION******")
-	newItems, _, eblof := computePSO(n, 1, keySize, max, maxConc, eps, set1, set2, eblofCopy)
+	newItems, _, eblof := computePSO(n, 1, keySize, domain, maxConc, eps, set1, set2, eblofCopy)
 	eblofCopy = eblof
 
 	// Check item exists in set2 and not in set1
@@ -91,7 +107,7 @@ func TestInter(t *testing.T) {
 
 func TestCA(t *testing.T) {
 	log.Println("******TESTING CARDINALITY******")
-	_, count, _ := computePSO(n, 2, keySize, max, maxConc, eps, set1, set2, eblofCopy)
+	_, count, _ := computePSO(n, 2, keySize, domain, maxConc, eps, set1, set2, eblofCopy)
 
 	// Check item exists in set2 and not in set1
 	chkCount := 0
