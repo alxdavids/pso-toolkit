@@ -17,18 +17,29 @@ var (
 	maxConc   = 10000            // Maximum number of initiated goroutines
 	keySize   = 1024             // key size for paillier
 	mode      = 0                // 0 = PSU, 1 = PSI, 2 = PSI/PSU-CA
-	eps       = math.Pow(2, -30) // false-positive prob for BF
+	eps       = math.Pow(2, -50) // false-positive prob for BF
 	set1      []*big.Int         // set stored in blof
 	set2      []*big.Int         // set used for querying
 	eblofCopy *encbf.EncBloom    // Used for redoing tests without re-encrypting
+	outFile   string             // logging goes to a file
 )
 
 func init() {
 	flag.IntVar(&keySize, "k", 1024, "Sets the key size, choose 1024 or 2048")
 	flag.IntVar(&n, "n", 64, "Sets the set size")
 	flag.IntVar(&maxProcs, "m", 4, "Sets the max number of threads to use")
+	flag.StringVar(&outFile, "f", "", "File name for log output")
 	prev := runtime.GOMAXPROCS(maxProcs)
 	log.Printf("Previous number of threads used: %v\n", prev)
+
+	// Enable logging to file
+	f, err := os.OpenFile("outFile", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	if err != nil {
+		t.Fatalf("error opening file: %v", err)
+	}
+	defer f.Close()
+
+	log.SetOutput(f)
 }
 
 func TestUnion(t *testing.T) {
