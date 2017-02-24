@@ -6,6 +6,7 @@ import (
 	"log"
 	"math"
 	"math/big"
+	"os"
 	"runtime"
 	"testing"
 )
@@ -31,15 +32,6 @@ func init() {
 	flag.StringVar(&outFile, "f", "", "File name for log output")
 	prev := runtime.GOMAXPROCS(maxProcs)
 	log.Printf("Previous number of threads used: %v\n", prev)
-
-	// Enable logging to file
-	f, err := os.OpenFile("outFile", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
-	if err != nil {
-		t.Fatalf("error opening file: %v", err)
-	}
-	defer f.Close()
-
-	log.SetOutput(f)
 }
 
 func TestUnion(t *testing.T) {
@@ -132,8 +124,6 @@ func TestCA(t *testing.T) {
 	}
 
 	if chkCount != count {
-		log.Println(set1)
-		log.Println(set2)
 		log.Println(chkCount)
 		log.Println(count)
 		log.Fatalln("Cardinality check incorrect")
