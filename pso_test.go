@@ -6,7 +6,6 @@ import (
 	"log"
 	"math"
 	"math/big"
-	"os"
 	"runtime"
 	"testing"
 )
