@@ -17,7 +17,7 @@ var (
 	maxConc   = 10000            // Maximum number of initiated goroutines
 	keySize   = 1024             // key size for paillier
 	mode      = 0                // 0 = PSU, 1 = PSI, 2 = PSI/PSU-CA
-	eps       = math.Pow(2, -50) // false-positive prob for BF
+	eps       = math.Pow(2, -30) // false-positive prob for BF
 	set1      []*big.Int         // set stored in blof
 	set2      []*big.Int         // set used for querying
 	eblofCopy *encbf.EncBloom    // Used for redoing tests without re-encrypting

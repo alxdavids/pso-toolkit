@@ -42,11 +42,11 @@ func computePSO(n, mode, keySize, max, maxConc int, eps float64, set1, set2 []*b
 	}
 	// Compute combined ciphertexts
 	eblof.HomCombine()
-	log.Println("Hom time: " + time.Since(checkTime).String())
+	log.Printf("Hom time: %v", time.Since(checkTime).Seconds())
 
 	decTime := time.Now()
 	ptxts := eblof.Decrypt()
-	log.Println("Dec time: " + time.Since(decTime).String())
+	log.Printf("Dec time: %v", time.Since(decTime).Seconds())
 
 	// Generate correct output for set operation
 	outTime := time.Now()
@@ -82,9 +82,9 @@ func computePSO(n, mode, keySize, max, maxConc int, eps float64, set1, set2 []*b
 			}
 		}
 	}
-	log.Println("Out time: " + time.Since(outTime).String())
+	log.Printf("Out time: %v", time.Since(outTime).Seconds())
 
-	log.Println("Full time: " + time.Since(startTime).String())
+	log.Printf("Full time: %v", time.Since(startTime).Seconds())
 	eblof.ResetForTesting()
 	return items, count, eblof
 }
