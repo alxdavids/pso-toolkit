@@ -2,26 +2,30 @@ package pso
 
 import (
 	"flag"
-	"github.com/alxdavids/bloom-filter/encbf"
+	"github.com/alxdavids/yabf/encbf"
 	"log"
 	"math"
 	"math/big"
+	"os"
 	"runtime"
 	"testing"
 )
 
 var (
-	domain    int             // domain size of elements (change this for influence over intersection size)
-	n         int             // size of set
-	maxProcs  int             // Max number of threads
-	maxConc   int             // Maximum number of initiated goroutines
-	keySize   int             // key size for paillier
-	mode      = 0             // 0 = PSU, 1 = PSI, 2 = PSI/PSU-CA
-	eps       float64         // false-positive prob for BF
-	set1      []*big.Int      // set stored in blof
-	set2      []*big.Int      // set used for querying
-	eblofCopy *encbf.EncBloom // Used for redoing tests without re-encrypting
-	outFile   string          // logging goes to a file
+	domainFactor int                                                          // domain size of elements (change this for influence over intersection size)
+	domainSize   int                                                          // domain size of elements (change this for influence over intersection size)
+	n            int                                                          // size of set
+	maxProcs     int                                                          // Max number of threads
+	maxConc      int                                                          // Maximum number of initiated goroutines
+	keySize      int                                                          // key size for paillier
+	k            int                                                          // -log_2(k) = eps (number of hash functions)
+	mode         = 0                                                          // 0 = PSU, 1 = PSI, 2 = PSI/PSU-CA, 3 = all
+	eps          float64                                                      // false-positive prob for BF
+	set1         []*big.Int                                                   // set stored in blof
+	set2         []*big.Int                                                   // set used for querying
+	currEblof    *encbf.EncBloom                                        = nil // Used for redoing tests without re-encrypting
+	outFile      string                                                       // logging output file
+	psoLog       = log.New(os.Stderr, "", log.LstdFlags|log.Lshortfile)       // logger for file
 )
 
 func init() {
@@ -30,9 +34,9 @@ func init() {
 	flag.IntVar(&k, "false_positive", 30, "False positive probability (-log_2)")
 	flag.IntVar(&maxProcs, "max_threads", 4, "Sets the max number of threads to use")
 	flag.IntVar(&maxConc, "max_conc", 10000, "Sets the max number of goroutines")
-	flag.IntVar(&domain, "domain_size", 5, "Size of domain (actual_domain_size = domain_size*n)")
-	flag.IntVar(&mode, "mode", 0, "Mode (0 = PSU, 1 = PSI, 2 = PSU/I-CA)")
-	flag.StringVar(&outFile, "o", "", "File name for log output")
+	flag.IntVar(&domainFactor, "domain_factor", 5, "Size of domain (actual_domain_size = domain_factor*n)")
+	flag.IntVar(&mode, "mode", 0, "Mode (0 = PSU, 1 = PSI, 2 = PSU/I-CA), 3 = all")
+	flag.StringVar(&outFile, "out", "", "File name for log output")
 	prev := runtime.GOMAXPROCS(maxProcs)
 
 	eps = math.Pow(2, -30)
@@ -43,19 +47,33 @@ func init() {
 	log.Printf("Key size: %v\n", keySize)
 	log.Printf("Set size: %v\n", n)
 	log.Printf("False positive: %v\n", k)
+
+	// open log file if specified
+	if outFile != "" {
+		f, err := os.Create(outFile)
+		if err != nil {
+			log.Fatalf("error creating file: %v", err)
+		}
+		psoLog = log.New(f, "", log.LstdFlags|log.Lshortfile)
+		defer f.Close()
+	}
+
+	// Generate the sets that are to be used
+	domainSize := int64(n * domainFactor)
+	set1 = generateSet(n, int64(domainSize))
+	set2 = generateSet(n, int64(domainSize))
 }
 
 func TestUnion(t *testing.T) {
-	log.Println("******TESTING UNION******")
+	if mode != 0 && mode != 3 {
+		psoLog.Printf("Not testing union; mode=%v", mode)
+		return
+	}
 
-	// set the size of the domain here
-	domain = 5 * n
-	set1 = generateSet(n, int64(domain))
-	set2 = generateSet(n, int64(domain))
-
-	newItems, _, eblof := computePSO(n, 0, keySize, domain, maxConc, eps, set1, set2, nil)
+	psoLog.Println("******TESTING UNION******")
+	newItems, _, eblof := computePSO(n, 0, keySize, domainSize, maxConc, eps, set1, set2, currEblof, psoLog)
 	eblof.DumpParams()
-	eblofCopy = eblof
+	currEblof = eblof
 
 	// Check item exists in set2 and not in set1
 	for _, v := range newItems {
@@ -73,22 +91,27 @@ func TestUnion(t *testing.T) {
 		}
 
 		if !b1 {
-			log.Println(v)
+			psoLog.Println(v)
 			log.Fatalln("Element found in set1")
 		}
 
 		if !b2 {
-			log.Println(v)
+			psoLog.Println(v)
 			log.Fatalln("Element not found in set2")
 		}
 	}
-	log.Println("******FINISHED UNION******")
+	psoLog.Println("******FINISHED UNION******")
 }
 
 func TestInter(t *testing.T) {
-	log.Println("******TESTING INTERSECTION******")
-	newItems, _, eblof := computePSO(n, 1, keySize, domain, maxConc, eps, set1, set2, eblofCopy)
-	eblofCopy = eblof
+	if mode != 1 && mode != 3 {
+		psoLog.Printf("Not testing intersection; mode=%v", mode)
+		return
+	}
+
+	psoLog.Println("******TESTING INTERSECTION******")
+	newItems, _, eblof := computePSO(n, 1, keySize, domainSize, maxConc, eps, set1, set2, currEblof, psoLog)
+	currEblof = eblof
 
 	// Check item exists in set2 and not in set1
 	for _, v := range newItems {
@@ -106,21 +129,25 @@ func TestInter(t *testing.T) {
 		}
 
 		if !b1 {
-			log.Println(v)
+			psoLog.Println(v)
 			log.Fatalln("Element not found in set1")
 		}
 
 		if !b2 {
-			log.Println(v)
+			psoLog.Println(v)
 			log.Fatalln("Element not found in set2")
 		}
 	}
-	log.Println("******FINISHED INTERSECTION******")
+	psoLog.Println("******FINISHED INTERSECTION******")
 }
 
 func TestCA(t *testing.T) {
-	log.Println("******TESTING CARDINALITY******")
-	_, count, _ := computePSO(n, 2, keySize, domain, maxConc, eps, set1, set2, eblofCopy)
+	if mode != 2 && mode != 3 {
+		psoLog.Printf("Not testing cardinality; mode=%v", mode)
+		return
+	}
+	psoLog.Println("******TESTING CARDINALITY******")
+	_, count, _ := computePSO(n, 2, keySize, domainSize, maxConc, eps, set1, set2, currEblof, psoLog)
 
 	// Check item exists in set2 and not in set1
 	chkCount := 0
@@ -133,9 +160,9 @@ func TestCA(t *testing.T) {
 	}
 
 	if chkCount != count {
-		log.Println(chkCount)
-		log.Println(count)
+		psoLog.Println(chkCount)
+		psoLog.Println(count)
 		log.Fatalln("Cardinality check incorrect")
 	}
-	log.Println("******FINISHED CARDINALITY******")
+	psoLog.Println("******FINISHED CARDINALITY******")
 }

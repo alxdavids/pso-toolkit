@@ -2,15 +2,15 @@ package pso
 
 import (
 	"crypto/rand"
-	"github.com/alxdavids/bloom-filter/encbf"
-	"github.com/alxdavids/bloom-filter/standard"
+	"github.com/alxdavids/yabf/encbf"
+	"github.com/alxdavids/yabf/standard"
 	"log"
 	"math/big"
 	"time"
 	"xojoc.pw/bitset"
 )
 
-func computePSO(n, mode, keySize, max, maxConc int, eps float64, set1, set2 []*big.Int, eblof *encbf.EncBloom) ([]*big.Int, int, *encbf.EncBloom) {
+func computePSO(n, mode, keySize, max, maxConc int, eps float64, set1, set2 []*big.Int, eblof *encbf.EncBloom, psoLog *log.Logger) ([]*big.Int, int, *encbf.EncBloom) {
 	startTime := time.Now()
 
 	// Give the option of providing a ready-made EBF for faster tests
@@ -42,11 +42,11 @@ func computePSO(n, mode, keySize, max, maxConc int, eps float64, set1, set2 []*b
 	}
 	// Compute combined ciphertexts
 	eblof.HomCombine()
-	log.Printf("Hom time: %v", time.Since(checkTime).Seconds())
+	psoLog.Printf("Hom time: %v", time.Since(checkTime).Seconds())
 
 	decTime := time.Now()
 	ptxts := eblof.Decrypt()
-	log.Printf("Dec time: %v", time.Since(decTime).Seconds())
+	psoLog.Printf("Dec time: %v", time.Since(decTime).Seconds())
 
 	// Generate correct output for set operation
 	outTime := time.Now()
@@ -82,9 +82,9 @@ func computePSO(n, mode, keySize, max, maxConc int, eps float64, set1, set2 []*b
 			}
 		}
 	}
-	log.Printf("Out time: %v", time.Since(outTime).Seconds())
+	psoLog.Printf("Out time: %v", time.Since(outTime).Seconds())
 
-	log.Printf("Full time: %v", time.Since(startTime).Seconds())
+	psoLog.Printf("Full time: %v", time.Since(startTime).Seconds())
 	eblof.ResetForTesting()
 	return items, count, eblof
 }
@@ -96,7 +96,7 @@ func generateSet(n int, max int64) []*big.Int {
 	for i := 0; i < int(n); i++ {
 		r, e := rand.Int(rand.Reader, big.NewInt(max))
 		if e != nil {
-			log.Fatalln(e)
+			psoLog.Fatalln(e)
 		}
 
 		// Make sure we get unique elements
