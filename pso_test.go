@@ -11,31 +11,41 @@ import (
 )
 
 var (
-	domain    int                // domain size of elements (change this for influence over intersection size)
-	n         int                // size of set
-	maxProcs  int                // Max number of threads
-	maxConc   = 10000            // Maximum number of initiated goroutines
-	keySize   = 1024             // key size for paillier
-	mode      = 0                // 0 = PSU, 1 = PSI, 2 = PSI/PSU-CA
-	eps       = math.Pow(2, -30) // false-positive prob for BF
-	set1      []*big.Int         // set stored in blof
-	set2      []*big.Int         // set used for querying
-	eblofCopy *encbf.EncBloom    // Used for redoing tests without re-encrypting
-	outFile   string             // logging goes to a file
+	domain    int             // domain size of elements (change this for influence over intersection size)
+	n         int             // size of set
+	maxProcs  int             // Max number of threads
+	maxConc   int             // Maximum number of initiated goroutines
+	keySize   int             // key size for paillier
+	mode      = 0             // 0 = PSU, 1 = PSI, 2 = PSI/PSU-CA
+	eps       float64         // false-positive prob for BF
+	set1      []*big.Int      // set stored in blof
+	set2      []*big.Int      // set used for querying
+	eblofCopy *encbf.EncBloom // Used for redoing tests without re-encrypting
+	outFile   string          // logging goes to a file
 )
 
 func init() {
-	flag.IntVar(&keySize, "k", 1024, "Sets the key size, choose 1024 or 2048")
-	flag.IntVar(&n, "n", 64, "Sets the set size")
-	flag.IntVar(&maxProcs, "m", 4, "Sets the max number of threads to use")
-	flag.StringVar(&outFile, "f", "", "File name for log output")
+	flag.IntVar(&keySize, "key_length", 1024, "Sets the key size, choose 1024 or 2048")
+	flag.IntVar(&n, "set_size", 64, "Size of the sets considered")
+	flag.IntVar(&k, "false_positive", 30, "False positive probability (-log_2)")
+	flag.IntVar(&maxProcs, "max_threads", 4, "Sets the max number of threads to use")
+	flag.IntVar(&maxConc, "max_conc", 10000, "Sets the max number of goroutines")
+	flag.IntVar(&domain, "domain_size", 5, "Size of domain (actual_domain_size = domain_size*n)")
+	flag.IntVar(&mode, "mode", 0, "Mode (0 = PSU, 1 = PSI, 2 = PSU/I-CA)")
+	flag.StringVar(&outFile, "o", "", "File name for log output")
 	prev := runtime.GOMAXPROCS(maxProcs)
+
+	eps = math.Pow(2, -30)
+
+	// Print params
 	log.Printf("Previous number of threads used: %v\n", prev)
+	log.Printf("Max number of threads: %v\n", maxProcs)
+	log.Printf("Key size: %v\n", keySize)
+	log.Printf("Set size: %v\n", n)
+	log.Printf("False positive: %v\n", k)
 }
 
 func TestUnion(t *testing.T) {
-	log.Printf("Max number of threads: %v\n", maxProcs)
-	log.Printf("Key size: %v\n", keySize)
 	log.Println("******TESTING UNION******")
 
 	// set the size of the domain here
